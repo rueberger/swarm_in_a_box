@@ -1,0 +1,245 @@
+version: '3.4'
+
+services:
+  mongo:
+    build:
+      context: ./mongo
+    image: 'rueberger/mongo'
+    volumes:
+      - 'mongo:/data/db'
+      - 'logs:/logs'
+    networks:
+      core:
+        # this containers services available at just 'mongo'
+        aliases:
+          - mongo
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 10G
+
+  jenkins:
+    build:
+      context: ./jenkins
+    image: 'rueberger/jenkins'
+    networks:
+      - core
+    ports:
+      - '172.30.0.0:8090:8080'
+      - '172.30.0.0:50000:50000'
+    # map in docker socket and binary so jenkin can build things
+    volumes:
+      - 'jenkins:/var/jenkins_home'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - '/usr/bin/docker:/usr/bin/docker'
+      - 'logs:/logs'
+    # see https://issues.jenkins-ci.org/browse/JENKINS-48300
+    environment:
+      JAVA_OPTS: " -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=60"
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 6G
+
+
+  redis:
+    build:
+      context: ./redis
+    image: 'rueberger/redis'
+    networks:
+      core:
+        aliases:
+          - redis
+    deploy:
+      restart_policy:
+        condition:
+          any
+      resources:
+        limits:
+          memory: 16G
+
+
+  kafka:
+    build:
+      context: ./kafka
+    image: 'rueberger/kafka'
+    depends_on:
+      - zookeeper
+    networks:
+      core:
+        aliases:
+          - kafka
+    deploy:
+      restart_policy:
+        condition:
+          any
+      resources:
+        limits:
+          memory: 3G
+
+  zookeeper:
+    build:
+      context: ./zookeeper
+    image: 'rueberger/zookeeper'
+    networks:
+      core:
+        aliases:
+          - zookeeper
+    deploy:
+      restart_policy:
+        condition:
+          any
+      resources:
+        limits:
+          memory: 2G
+
+  elasticsearch:
+    build:
+      context: elasticsearch/
+    image: 'rueberger/elasticsearch'
+    volumes:
+      - 'elastic:/usr/share/elasticsearch/data'
+      - './elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro'
+    ports:
+      - "172.30.0.0:9200:9200"
+      - "172.30.0.0:9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xms6g -Xmx6g"
+    networks:
+      - elk
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 16G
+
+
+  logstash:
+    build:
+      context: logstash/
+    image: 'rueberger/logstash'
+    volumes:
+      - './logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro'
+      - './logstash/pipeline:/usr/share/logstash/pipeline:ro'
+      - 'logstash_data:/usr/share/logstash/data'
+    environment:
+      LS_JAVA_OPTS: "-Xmx1g -Xms256m"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 2G
+
+
+  kibana:
+    build:
+      context: kibana/
+    image: 'rueberger/kibana'
+    volumes:
+      - './kibana/config/:/usr/share/kibana/config:ro'
+    ports:
+      - "172.30.0.0:5601:5601"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 2G
+
+
+  filebeat:
+    build:
+      context: filebeat/
+    image: 'rueberger/filebeat'
+    volumes:
+      - './filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro'
+      - './filebeat/curator/curator.yml:/usr/share/filebeat/.curator/curator.yml:ro'
+      - './filebeat/curator/action.yml:/usr/share/filebeat/.curator/action.yml:ro'
+      - 'logs:/logs'
+      - 'filebeat_data:/filebeat_data'
+    networks:
+      - elk
+    depends_on:
+      - logstash
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 500M
+
+
+  heartbeat:
+    build:
+      context: heartbeat/
+    image: 'rueberger/heartbeat'
+    volumes:
+      - './heartbeat/heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro'
+    networks:
+      - elk
+      - core
+    depends_on:
+      - elasticsearch
+      - mongo
+      - kafka
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 500M
+
+  metricbeat:
+    build:
+      context: metricbeat/
+    image: 'rueberger/metricbeat'
+    # map in docker socket for collection of docker metrics
+    volumes:
+      - './metricbeat/config/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro'
+      - '/proc:/hostfs/proc:ro'
+      - '/sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    networks:
+      - elk
+      - core
+    depends_on:
+      - logstash
+      - mongo
+      - kafka
+    command: metricbeat --system.hostfs=/hostfs
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 500M
+
+
+volumes:
+  mongo:
+  jenkins:
+  logs:
+  elastic:
+  logstash_data:
+  filebeat_data:
+
+networks:
+  core:
+    driver: overlay
+    attachable: true
+  elk:
+    driver: overlay

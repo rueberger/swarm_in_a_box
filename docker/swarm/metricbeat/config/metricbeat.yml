@@ -1,0 +1,62 @@
+metricbeat.modules:
+- module: system
+  metricsets:
+    - "cpu"
+    - "filesystem"
+    - "memory"
+    - "network"
+    # disabled due to apparmor problems: https://github.com/elastic/beats/issues/6932
+    #- process
+  enabled: true
+  period: 15s
+  processes: ['.*']
+  cpu_ticks: false
+
+- module: mongodb
+  metricsets: ["dbstats", "status"]
+  period: 15s
+
+  # The hosts must be passed as MongoDB URLs in the format:
+  # [mongodb://][user:pass@]host[:port].
+  # The username and password can also be set using the respective configuration
+  # options. The credentials in the URL take precedence over the username and
+  # password configuration options.
+  hosts: ["mongo:27017"]
+
+  # Username to use when connecting to MongoDB. Empty by default.
+  #username: user
+
+  # Password to use when connecting to MongoDB. Empty by default.
+  #password: pass
+
+- module: docker
+  metricsets:
+    - "container"
+    - "cpu"
+    - "diskio"
+    - "healthcheck"
+    - "info"
+    - "image"
+    - "memory"
+    - "network"
+  hosts: ["unix:///var/run/docker.sock"]
+  period: 15s
+  enabled: true
+
+  # Replace dots in labels with `_`. Set to false to keep dots
+  labels.dedot: true
+
+- module: kafka
+  metricsets: ["consumergroup", "partition"]
+  period: 15s
+  hosts: ["kafka:9092"]
+  enabled: true
+
+- module: redis
+  metricsets: ["info", "keyspace"]
+  enabled: true
+  period: 15s
+  hosts: ['redis:6379']
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]

@@ -1,0 +1,13 @@
+heartbeat.monitors:
+- type: icmp
+  schedule: '@every 5s'
+  hosts: ["mongo", "kafka", "jenkins"]
+- type: tcp
+  schedule: '@every 5s'
+  hosts: ["mongo:27017", "kafka:9092", "jenkins:8080"]
+  mode: any
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+setup.kibana:
+  host: "kibana:5601"
+setup.dashboards.enabled: true
