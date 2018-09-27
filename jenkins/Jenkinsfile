@@ -1,0 +1,72 @@
+// declarative pipeline for 'foo'
+pipeline {
+    agent any
+    triggers {
+        pollSCM('*/1 * * * *')
+    }
+    // Only 1 concurrent build is allowed at a time.
+    // Newer builds are pulled off the queue first. When a build reaches the
+    // milestone at the end of the lock, all jobs started prior to the current
+    // build that are still waiting for the lock will be aborted
+    options {
+        lock resource: 'foo'
+    }
+    stages {
+        stage('Build') {
+            steps {
+                // The first milestone step starts tracking concurrent build order
+                milestone ordinal: 1, label: 'build'
+                sh 'make image'
+            }
+        }
+        stage('Test') {
+            steps {
+                cache(
+                    caches: [[
+                        $class: 'ArbitraryFileCache',
+                        excludes: '',
+                        includes: '**/*',
+                        path: '.hypothesis'
+                    ]],
+                    maxCacheSize: 250
+                ){
+                    sh 'make run_tests'
+                    sh 'make pull_tests'
+                }
+            }
+            post {
+                always {
+                    junit 'nosetests.xml'
+                    // report pylint results
+                    warnings (
+                        canResolveRelativePaths: false,
+                        categoriesPattern: '',
+                        defaultEncoding: '',
+                        excludePattern: '',
+                        healthy: '',
+                        includePattern: '',
+                        messagesPattern: '',
+                        parserConfigurations: [[
+                            parserName: 'PyLint',
+                            pattern: 'pylint.log'
+                        ]],
+                        unHealthy: ''
+                    )
+                }
+                success {
+                    sh 'make set_latest'
+                    script {
+                        if (env.BRANCH_NAME  == 'master') {
+                            build job: 'bar/master', wait: false
+                            build job: 'baz/master', wait: false
+                        }
+                    }
+                }
+                cleanup {
+                    sh 'make clean_tests'
+                    milestone ordinal: 2, label: 'test'
+                }
+            }
+        }
+    }
+}
