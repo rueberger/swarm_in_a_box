@@ -1,0 +1,8 @@
+# workaround for https://github.com/moby/moby/issues/34142
+#  cannot copy in test caches with proper permissions with `docker cp`...
+ARG BRANCH_NAME
+ARG GIT_COMMIT
+
+FROM rueberger/foo:$BRANCH_NAME-$GIT_COMMIT
+
+ADD --chown=app:app .hypothesis /home/app/foo/.hypothesis/
