@@ -12,5 +12,5 @@ class TestEcho(unittest.TestCase):
     """
 
     @given(strategies.text())
-    def test_echo(utterance):
-        self.assertEquals(echo(utterance), utterance)
+    def test_echo(self, utterance):
+        self.assertEqual(echo(utterance), utterance)
