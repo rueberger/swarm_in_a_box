@@ -1,6 +1,6 @@
 # Example python project, package 'foo'
 
-sComes with docker and jenkins integration.
+Simple python package boilerplate. Comes with docker and jenkins integration.
 
 ## Features
 
