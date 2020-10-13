@@ -1,6 +1,6 @@
 # Example python project, package 'foo'
 
-Canonical modern python package. Comes with docker and jenkins integration.
+sComes with docker and jenkins integration.
 
 ## Features
 
